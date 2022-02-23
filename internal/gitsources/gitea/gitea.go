@@ -181,7 +181,7 @@ func (c *Client) LoginPassword(username, password, tokenName string) (string, er
 		return "", err
 	}
 	if resp.StatusCode == http.StatusUnauthorized {
-		return "", gitsource.ErrUnauthorized
+		return "", gitsource.NewErrUnauthorized(errors.Errorf("user not authorized"))
 	}
 	if resp.StatusCode/100 != 2 {
 		return "", errors.Errorf("gitea api status code %d", resp.StatusCode)

@@ -571,10 +571,10 @@ func (h *ActionHandler) HandleRemoteSourceAuth(ctx context.Context, remoteSource
 		tokenName := "agola-" + h.agolaID
 		accessToken, err := passwordSource.LoginPassword(loginName, loginPassword, tokenName)
 		if err != nil {
-			if errors.Is(err, gitsource.ErrUnauthorized) {
+			if gitsource.IsErrUnauthorized(err) {
 				return nil, util.NewErrUnauthorized(errors.Errorf("failed to login to remotesource %q: %w", remoteSourceName, err))
 			}
-			return nil, errors.Errorf("failed to login to remote source %q with login name %q: %w", rs.Name, loginName, err)
+			return nil, errors.Errorf("failed to login to remotesource %q with login name %q: %w", rs.Name, loginName, err)
 		}
 		requestj, err := json.Marshal(req)
 		if err != nil {

@@ -146,17 +146,17 @@ func (c *Client) RefreshOauth2Token(refreshToken string) (*oauth2.Token, error) 
 }
 
 func (c *Client) GetRepoInfo(repopath string) (*gitsource.RepoInfo, error) {
-	rr, _, err := c.client.Projects.GetProject(repopath, nil)
+	rr, resp, err := c.client.Projects.GetProject(repopath, nil)
 	if err != nil {
-		return nil, err
+		return nil, gitsource.GitSourceError(resp.StatusCode, err)
 	}
 	return fromGitlabRepo(rr), nil
 }
 
 func (c *Client) GetUserInfo() (*gitsource.UserInfo, error) {
-	user, _, err := c.client.Users.CurrentUser()
+	user, resp, err := c.client.Users.CurrentUser()
 	if err != nil {
-		return nil, err
+		return nil, gitsource.GitSourceError(resp.StatusCode, err)
 	}
 	return &gitsource.UserInfo{
 		ID:        strconv.Itoa(user.ID),
@@ -166,9 +166,9 @@ func (c *Client) GetUserInfo() (*gitsource.UserInfo, error) {
 }
 
 func (c *Client) GetFile(repopath, commit, file string) ([]byte, error) {
-	f, _, err := c.client.RepositoryFiles.GetFile(repopath, file, &gitlab.GetFileOptions{Ref: gitlab.String(commit)})
+	f, resp, err := c.client.RepositoryFiles.GetFile(repopath, file, &gitlab.GetFileOptions{Ref: gitlab.String(commit)})
 	if err != nil {
-		return nil, err
+		return nil, gitsource.GitSourceError(resp.StatusCode, err)
 	}
 	data, err := base64.StdEncoding.DecodeString(f.Content)
 	if err != nil {
@@ -178,20 +178,20 @@ func (c *Client) GetFile(repopath, commit, file string) ([]byte, error) {
 }
 
 func (c *Client) CreateDeployKey(repopath, title, pubKey string, readonly bool) error {
-	if _, _, err := c.client.DeployKeys.AddDeployKey(repopath, &gitlab.AddDeployKeyOptions{
+	if _, resp, err := c.client.DeployKeys.AddDeployKey(repopath, &gitlab.AddDeployKeyOptions{
 		Title: gitlab.String(title),
 		Key:   gitlab.String(pubKey),
 	}); err != nil {
-		return errors.Errorf("error creating deploy key: %w", err)
+		return gitsource.GitSourceError(resp.StatusCode, errors.Errorf("error creating deploy key: %w", err))
 	}
 
 	return nil
 }
 
 func (c *Client) UpdateDeployKey(repopath, title, pubKey string, readonly bool) error {
-	keys, _, err := c.client.DeployKeys.ListProjectDeployKeys(repopath, nil)
+	keys, resp, err := c.client.DeployKeys.ListProjectDeployKeys(repopath, nil)
 	if err != nil {
-		return errors.Errorf("error retrieving existing deploy keys: %w", err)
+		return gitsource.GitSourceError(resp.StatusCode, errors.Errorf("error retrieving existing deploy keys: %w", err))
 	}
 
 	for _, key := range keys {
@@ -199,32 +199,32 @@ func (c *Client) UpdateDeployKey(repopath, title, pubKey string, readonly bool) 
 			if key.Key == pubKey {
 				return nil
 			}
-			if _, err := c.client.DeployKeys.DeleteDeployKey(repopath, key.ID); err != nil {
-				return errors.Errorf("error removing existing deploy key: %w", err)
+			if resp, err := c.client.DeployKeys.DeleteDeployKey(repopath, key.ID); err != nil {
+				return gitsource.GitSourceError(resp.StatusCode, errors.Errorf("error removing existing deploy key: %w", err))
 			}
 		}
 	}
 
-	if _, _, err := c.client.DeployKeys.AddDeployKey(repopath, &gitlab.AddDeployKeyOptions{
+	if _, resp, err := c.client.DeployKeys.AddDeployKey(repopath, &gitlab.AddDeployKeyOptions{
 		Title: &title,
 		Key:   &pubKey,
 	}); err != nil {
-		return errors.Errorf("error creating deploy key: %w", err)
+		return gitsource.GitSourceError(resp.StatusCode, errors.Errorf("error creating deploy key: %w", err))
 	}
 
 	return nil
 }
 
 func (c *Client) DeleteDeployKey(repopath, title string) error {
-	keys, _, err := c.client.DeployKeys.ListProjectDeployKeys(repopath, nil)
+	keys, resp, err := c.client.DeployKeys.ListProjectDeployKeys(repopath, nil)
 	if err != nil {
-		return errors.Errorf("error retrieving existing deploy keys: %w", err)
+		return gitsource.GitSourceError(resp.StatusCode, errors.Errorf("error retrieving existing deploy keys: %w", err))
 	}
 
 	for _, key := range keys {
 		if key.Title == title {
-			if _, err := c.client.DeployKeys.DeleteDeployKey(repopath, key.ID); err != nil {
-				return errors.Errorf("error removing existing deploy key: %w", err)
+			if resp, err := c.client.DeployKeys.DeleteDeployKey(repopath, key.ID); err != nil {
+				return gitsource.GitSourceError(resp.StatusCode, errors.Errorf("error removing existing deploy key: %w", err))
 			}
 		}
 	}
@@ -240,25 +240,25 @@ func (c *Client) CreateRepoWebhook(repopath, url, secret string) error {
 		MergeRequestsEvents: gitlab.Bool(true),
 		Token:               gitlab.String(secret),
 	}
-	if _, _, err := c.client.Projects.AddProjectHook(repopath, opts); err != nil {
-		return errors.Errorf("error creating repository webhook: %w", err)
+	if _, resp, err := c.client.Projects.AddProjectHook(repopath, opts); err != nil {
+		return gitsource.GitSourceError(resp.StatusCode, errors.Errorf("error creating repository webhook: %w", err))
 	}
 
 	return nil
 }
 
 func (c *Client) DeleteRepoWebhook(repopath, u string) error {
-	hooks, _, err := c.client.Projects.ListProjectHooks(repopath, nil)
+	hooks, resp, err := c.client.Projects.ListProjectHooks(repopath, nil)
 	if err != nil {
-		return errors.Errorf("error retrieving repository webhooks: %w", err)
+		return gitsource.GitSourceError(resp.StatusCode, errors.Errorf("error retrieving repository webhooks: %w", err))
 	}
 
 	// match the full url so we can have multiple webhooks for different agola
 	// projects
 	for _, hook := range hooks {
 		if hook.URL == u {
-			if _, err := c.client.Projects.DeleteProjectHook(repopath, hook.ID); err != nil {
-				return errors.Errorf("error deleting existing repository webhook: %w", err)
+			if resp, err := c.client.Projects.DeleteProjectHook(repopath, hook.ID); err != nil {
+				return gitsource.GitSourceError(resp.StatusCode, errors.Errorf("error deleting existing repository webhook: %w", err))
 			}
 		}
 	}
@@ -267,21 +267,21 @@ func (c *Client) DeleteRepoWebhook(repopath, u string) error {
 }
 
 func (c *Client) CreateCommitStatus(repopath, commitSHA string, status gitsource.CommitStatus, targetURL, description, context string) error {
-	_, _, err := c.client.Commits.SetCommitStatus(repopath, commitSHA, &gitlab.SetCommitStatusOptions{
+	_, resp, err := c.client.Commits.SetCommitStatus(repopath, commitSHA, &gitlab.SetCommitStatusOptions{
 		State:       fromCommitStatus(status),
 		TargetURL:   gitlab.String(targetURL),
 		Description: gitlab.String(description),
 		Context:     gitlab.String(context),
 	})
-	return err
+	return gitsource.GitSourceError(resp.StatusCode, err)
 }
 
 func (c *Client) ListUserRepos() ([]*gitsource.RepoInfo, error) {
 	// get only repos with permission greater or equal to maintainer
 	opts := &gitlab.ListProjectsOptions{MinAccessLevel: gitlab.AccessLevel(gitlab.MaintainerPermissions)}
-	remoteRepos, _, err := c.client.Projects.ListProjects(opts)
+	remoteRepos, resp, err := c.client.Projects.ListProjects(opts)
 	if err != nil {
-		return nil, err
+		return nil, gitsource.GitSourceError(resp.StatusCode, err)
 	}
 
 	repos := []*gitsource.RepoInfo{}
@@ -309,9 +309,9 @@ func (c *Client) GetRef(repopath, ref string) (*gitsource.Ref, error) {
 	case strings.HasPrefix(ref, "refs/heads/"):
 
 		branch := strings.TrimPrefix(ref, "refs/heads/")
-		remoteBranch, _, err := c.client.Branches.GetBranch(repopath, branch)
+		remoteBranch, resp, err := c.client.Branches.GetBranch(repopath, branch)
 		if err != nil {
-			return nil, err
+			return nil, gitsource.GitSourceError(resp.StatusCode, err)
 		}
 
 		return &gitsource.Ref{
@@ -321,9 +321,9 @@ func (c *Client) GetRef(repopath, ref string) (*gitsource.Ref, error) {
 
 	case strings.HasPrefix(ref, "refs/tags/"):
 		tag := strings.TrimPrefix(ref, "refs/heads/")
-		remoteTag, _, err := c.client.Tags.GetTag(repopath, tag)
+		remoteTag, resp, err := c.client.Tags.GetTag(repopath, tag)
 		if err != nil {
-			return nil, err
+			return nil, gitsource.GitSourceError(resp.StatusCode, err)
 		}
 
 		return &gitsource.Ref{
@@ -353,9 +353,9 @@ func (c *Client) RefType(ref string) (gitsource.RefType, string, error) {
 }
 
 func (c *Client) GetCommit(repopath, commitSHA string) (*gitsource.Commit, error) {
-	commit, _, err := c.client.Commits.GetCommit(repopath, commitSHA, nil)
+	commit, resp, err := c.client.Commits.GetCommit(repopath, commitSHA, nil)
 	if err != nil {
-		return nil, err
+		return nil, gitsource.GitSourceError(resp.StatusCode, err)
 	}
 
 	return &gitsource.Commit{

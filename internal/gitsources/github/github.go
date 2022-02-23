@@ -200,8 +200,8 @@ func (c *Client) RefreshOauth2Token(refreshToken string) (*oauth2.Token, error) 
 }
 
 func (c *Client) GetUserInfo() (*gitsource.UserInfo, error) {
-	user, _, err := c.client.Users.Get(context.TODO(), "")
-	if err != nil {
+	user, resp, err := c.client.Users.Get(context.TODO(), "")
+	if err = gitsource.GitSourceError(resp.StatusCode, err); err != nil {
 		return nil, err
 	}
 
@@ -221,8 +221,8 @@ func (c *Client) GetRepoInfo(repopath string) (*gitsource.RepoInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	rr, _, err := c.client.Repositories.Get(context.TODO(), owner, reponame)
-	if err != nil {
+	rr, resp, err := c.client.Repositories.Get(context.TODO(), owner, reponame)
+	if err = gitsource.GitSourceError(resp.StatusCode, err); err != nil {
 		return nil, err
 	}
 	return fromGithubRepo(rr), nil
@@ -247,12 +247,12 @@ func (c *Client) CreateDeployKey(repopath, title, pubKey string, readonly bool) 
 	if err != nil {
 		return err
 	}
-	if _, _, err = c.client.Repositories.CreateKey(context.TODO(), owner, reponame, &github.Key{
+	if _, resp, err := c.client.Repositories.CreateKey(context.TODO(), owner, reponame, &github.Key{
 		Title:    github.String(title),
 		Key:      github.String(pubKey),
 		ReadOnly: github.Bool(readonly),
 	}); err != nil {
-		return errors.Errorf("error creating deploy key: %w", err)
+		return gitsource.GitSourceError(resp.StatusCode, errors.Errorf("error creating deploy key: %w", err))
 	}
 	return nil
 }
@@ -266,9 +266,9 @@ func (c *Client) UpdateDeployKey(repopath, title, pubKey string, readonly bool) 
 	// the same value it is correctly readded and the admin must force a
 	// authorized_keys regeneration on the server. To avoid this we update it only
 	// when the public key value has changed
-	keys, _, err := c.client.Repositories.ListKeys(context.TODO(), owner, reponame, nil)
+	keys, resp, err := c.client.Repositories.ListKeys(context.TODO(), owner, reponame, nil)
 	if err != nil {
-		return errors.Errorf("error retrieving existing deploy keys: %w", err)
+		return gitsource.GitSourceError(resp.StatusCode, errors.Errorf("error retrieving existing deploy keys: %w", err))
 	}
 
 	for _, key := range keys {
@@ -276,18 +276,18 @@ func (c *Client) UpdateDeployKey(repopath, title, pubKey string, readonly bool) 
 			if *key.Key == pubKey {
 				return nil
 			}
-			if _, err := c.client.Repositories.DeleteKey(context.TODO(), owner, reponame, *key.ID); err != nil {
-				return errors.Errorf("error removing existing deploy key: %w", err)
+			if resp, err := c.client.Repositories.DeleteKey(context.TODO(), owner, reponame, *key.ID); err != nil {
+				return gitsource.GitSourceError(resp.StatusCode, errors.Errorf("error removing existing deploy key: %w", err))
 			}
 		}
 	}
 
-	if _, _, err = c.client.Repositories.CreateKey(context.TODO(), owner, reponame, &github.Key{
+	if _, resp, err = c.client.Repositories.CreateKey(context.TODO(), owner, reponame, &github.Key{
 		Title:    github.String(title),
 		Key:      github.String(pubKey),
 		ReadOnly: github.Bool(readonly),
 	}); err != nil {
-		return errors.Errorf("error creating deploy key: %w", err)
+		return gitsource.GitSourceError(resp.StatusCode, errors.Errorf("error creating deploy key: %w", err))
 	}
 
 	return nil
@@ -298,15 +298,15 @@ func (c *Client) DeleteDeployKey(repopath, title string) error {
 	if err != nil {
 		return err
 	}
-	keys, _, err := c.client.Repositories.ListKeys(context.TODO(), owner, reponame, nil)
+	keys, resp, err := c.client.Repositories.ListKeys(context.TODO(), owner, reponame, nil)
 	if err != nil {
-		return errors.Errorf("error retrieving existing deploy keys: %w", err)
+		return gitsource.GitSourceError(resp.StatusCode, errors.Errorf("error retrieving existing deploy keys: %w", err))
 	}
 
 	for _, key := range keys {
 		if *key.Title == title {
-			if _, err := c.client.Repositories.DeleteKey(context.TODO(), owner, reponame, *key.ID); err != nil {
-				return errors.Errorf("error removing existing deploy key: %w", err)
+			if resp, err := c.client.Repositories.DeleteKey(context.TODO(), owner, reponame, *key.ID); err != nil {
+				return gitsource.GitSourceError(resp.StatusCode, errors.Errorf("error removing existing deploy key: %w", err))
 			}
 		}
 	}
@@ -330,8 +330,8 @@ func (c *Client) CreateRepoWebhook(repopath, url, secret string) error {
 		Active: github.Bool(true),
 	}
 
-	if _, _, err = c.client.Repositories.CreateHook(context.TODO(), owner, reponame, hook); err != nil {
-		return errors.Errorf("error creating repository webhook: %w", err)
+	if _, resp, err := c.client.Repositories.CreateHook(context.TODO(), owner, reponame, hook); err != nil {
+		return gitsource.GitSourceError(resp.StatusCode, errors.Errorf("error creating repository webhook: %w", err))
 	}
 
 	return nil
@@ -349,7 +349,7 @@ func (c *Client) DeleteRepoWebhook(repopath, u string) error {
 	for {
 		pHooks, resp, err := c.client.Repositories.ListHooks(context.TODO(), owner, reponame, opt)
 		if err != nil {
-			return errors.Errorf("error retrieving repository webhooks: %w", err)
+			return gitsource.GitSourceError(resp.StatusCode, errors.Errorf("error retrieving repository webhooks: %w", err))
 		}
 		hooks = append(hooks, pHooks...)
 		if resp.NextPage == 0 {
@@ -362,8 +362,8 @@ func (c *Client) DeleteRepoWebhook(repopath, u string) error {
 	// projects
 	for _, hook := range hooks {
 		if hook.Config["url"] == u {
-			if _, err := c.client.Repositories.DeleteHook(context.TODO(), owner, reponame, *hook.ID); err != nil {
-				return errors.Errorf("error deleting existing repository webhook: %w", err)
+			if resp, err := c.client.Repositories.DeleteHook(context.TODO(), owner, reponame, *hook.ID); err != nil {
+				return gitsource.GitSourceError(resp.StatusCode, errors.Errorf("error deleting existing repository webhook: %w", err))
 			}
 		}
 	}
@@ -376,13 +376,13 @@ func (c *Client) CreateCommitStatus(repopath, commitSHA string, status gitsource
 	if err != nil {
 		return err
 	}
-	_, _, err = c.client.Repositories.CreateStatus(context.TODO(), owner, reponame, commitSHA, &github.RepoStatus{
+	_, resp, err := c.client.Repositories.CreateStatus(context.TODO(), owner, reponame, commitSHA, &github.RepoStatus{
 		State:       github.String(fromCommitStatus(status)),
 		TargetURL:   github.String(targetURL),
 		Description: github.String(description),
 		Context:     github.String(statusContext),
 	})
-	return err
+	return gitsource.GitSourceError(resp.StatusCode, err)
 }
 
 func (c *Client) ListUserRepos() ([]*gitsource.RepoInfo, error) {
@@ -392,7 +392,7 @@ func (c *Client) ListUserRepos() ([]*gitsource.RepoInfo, error) {
 	for {
 		pRemoteRepos, resp, err := c.client.Repositories.List(context.TODO(), "", opt)
 		if err != nil {
-			return nil, err
+			return nil, gitsource.GitSourceError(resp.StatusCode, err)
 		}
 		remoteRepos = append(remoteRepos, pRemoteRepos...)
 		if resp.NextPage == 0 {
@@ -432,9 +432,9 @@ func (c *Client) GetRef(repopath, ref string) (*gitsource.Ref, error) {
 		return nil, err
 	}
 
-	remoteRef, _, err := c.client.Git.GetRef(context.TODO(), owner, reponame, ref)
+	remoteRef, resp, err := c.client.Git.GetRef(context.TODO(), owner, reponame, ref)
 	if err != nil {
-		return nil, err
+		return nil, gitsource.GitSourceError(resp.StatusCode, err)
 	}
 
 	return fromGithubRef(remoteRef)
@@ -477,9 +477,9 @@ func (c *Client) GetCommit(repopath, commitSHA string) (*gitsource.Commit, error
 		return nil, err
 	}
 
-	commit, _, err := c.client.Git.GetCommit(context.TODO(), owner, reponame, commitSHA)
+	commit, resp, err := c.client.Git.GetCommit(context.TODO(), owner, reponame, commitSHA)
 	if err != nil {
-		return nil, err
+		return nil, gitsource.GitSourceError(resp.StatusCode, err)
 	}
 
 	return &gitsource.Commit{

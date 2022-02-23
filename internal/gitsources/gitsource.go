@@ -15,7 +15,6 @@
 package gitsource
 
 import (
-	"errors"
 	"net/http"
 
 	"agola.io/agola/internal/services/types"
@@ -31,8 +30,6 @@ const (
 	CommitStatusFailed  CommitStatus = "failed"
 )
 
-var ErrUnauthorized = errors.New("unauthorized")
-
 type GitSource interface {
 	GetRepoInfo(repopath string) (*RepoInfo, error)
 	GetFile(repopath, commit, file string) ([]byte, error)
@@ -45,6 +42,7 @@ type GitSource interface {
 	CreateCommitStatus(repopath, commitSHA string, status CommitStatus, targetURL, description, context string) error
 	// ListUserRepos report repos where the user has the permission to create deploy keys and webhooks
 	ListUserRepos() ([]*RepoInfo, error)
+
 	GetRef(repopath, ref string) (*Ref, error)
 	// RefType returns the ref type and the related name (branch, tag, pr id)
 	RefType(ref string) (RefType, string, error)

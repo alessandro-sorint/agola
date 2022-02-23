@@ -17,6 +17,7 @@ package action
 import (
 	"net/http"
 
+	gitsource "agola.io/agola/internal/gitsources"
 	"agola.io/agola/internal/services/common"
 	"agola.io/agola/internal/util"
 	csclient "agola.io/agola/services/configstore/client"
@@ -59,6 +60,26 @@ func ErrFromRemote(resp *http.Response, err error) error {
 		case http.StatusNotFound:
 			return util.NewErrNotExist(err)
 		}
+	}
+
+	return err
+}
+
+func ErrFromGitSource(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if gitsource.IsErrForbidden(err) {
+		return util.NewErrForbidden(err)
+	} else if gitsource.IsErrNotExist(err) {
+		return util.NewErrNotExist(err)
+	} else if gitsource.IsErrServiceUnavailable(err) {
+		return util.NewErrInternal(err)
+	} else if gitsource.IsErrUnauthorized(err) {
+		return util.NewErrUnauthorized(err)
+	} else if gitsource.IsErrUnprocessableEntity(err) {
+		return util.NewErrBadRequest(err)
 	}
 
 	return err

@@ -129,7 +129,7 @@ func (h *ActionHandler) CreateProject(ctx context.Context, req *CreateProjectReq
 
 	repo, err := gitSource.GetRepoInfo(req.RepoPath)
 	if err != nil {
-		return nil, errors.Errorf("failed to get repository info from gitsource: %w", err)
+		return nil, ErrFromGitSource(errors.Errorf("failed to get repository info from gitsource: %w", err))
 	}
 
 	h.log.Infof("generating ssh key pairs")
@@ -271,7 +271,7 @@ func (h *ActionHandler) ProjectUpdateRepoLinkedAccount(ctx context.Context, proj
 	// check user has access to the repository
 	_, err = gitsource.GetRepoInfo(p.RepositoryPath)
 	if err != nil {
-		return nil, errors.Errorf("failed to get repository info from gitsource: %w", err)
+		return nil, ErrFromGitSource(errors.Errorf("failed to get repository info from gitsource: %w", err))
 	}
 
 	p.LinkedAccountID = la.ID
@@ -308,15 +308,15 @@ func (h *ActionHandler) setupGitSourceRepo(ctx context.Context, rs *cstypes.Remo
 	deployKeyName := fmt.Sprintf("agola deploy key - %s", project.ID)
 	h.log.Infof("creating/updating deploy key: %s", deployKeyName)
 	if err := gitsource.UpdateDeployKey(project.RepositoryPath, deployKeyName, string(pubKey), true); err != nil {
-		return errors.Errorf("failed to create deploy key: %w", err)
+		return ErrFromGitSource(errors.Errorf("failed to create deploy key: %w", err))
 	}
 	h.log.Infof("deleting existing webhooks")
 	if err := gitsource.DeleteRepoWebhook(project.RepositoryPath, webhookURL); err != nil {
-		return errors.Errorf("failed to delete repository webhook: %w", err)
+		return ErrFromGitSource(errors.Errorf("failed to delete repository webhook: %w", err))
 	}
 	h.log.Infof("creating webhook to url: %s", webhookURL)
 	if err := gitsource.CreateRepoWebhook(project.RepositoryPath, webhookURL, project.WebhookSecret); err != nil {
-		return errors.Errorf("failed to create repository webhook: %w", err)
+		return ErrFromGitSource(errors.Errorf("failed to create repository webhook: %w", err))
 	}
 
 	return nil
@@ -339,11 +339,11 @@ func (h *ActionHandler) cleanupGitSourceRepo(ctx context.Context, rs *cstypes.Re
 	deployKeyName := fmt.Sprintf("agola deploy key - %s", project.ID)
 	h.log.Infof("deleting deploy key: %s", deployKeyName)
 	if err := gitsource.DeleteDeployKey(project.RepositoryPath, deployKeyName); err != nil {
-		return errors.Errorf("failed to create deploy key: %w", err)
+		return ErrFromGitSource(errors.Errorf("failed to create deploy key: %w", err))
 	}
 	h.log.Infof("deleting existing webhooks")
 	if err := gitsource.DeleteRepoWebhook(project.RepositoryPath, webhookURL); err != nil {
-		return errors.Errorf("failed to delete repository webhook: %w", err)
+		return ErrFromGitSource(errors.Errorf("failed to delete repository webhook: %w", err))
 	}
 
 	return nil
@@ -472,7 +472,7 @@ func (h *ActionHandler) ProjectCreateRun(ctx context.Context, projectRef, branch
 	// check user has access to the repository
 	repoInfo, err := gitSource.GetRepoInfo(p.RepositoryPath)
 	if err != nil {
-		return errors.Errorf("failed to get repository info from gitsource: %w", err)
+		return ErrFromGitSource(errors.Errorf("failed to get repository info from gitsource: %w", err))
 	}
 
 	set := 0
@@ -512,7 +512,7 @@ func (h *ActionHandler) ProjectCreateRun(ctx context.Context, projectRef, branch
 	}
 	ref, err := gitSource.GetRef(p.RepositoryPath, refName)
 	if err != nil {
-		return errors.Errorf("failed to get ref information from git source for ref %q: %w", refName, err)
+		return ErrFromGitSource(errors.Errorf("failed to get ref information from git source for ref %q: %w", refName, err))
 	}
 	refCommitSHA = ref.CommitSHA
 	switch gitRefType {
@@ -534,7 +534,7 @@ func (h *ActionHandler) ProjectCreateRun(ctx context.Context, projectRef, branch
 
 	commit, err := gitSource.GetCommit(p.RepositoryPath, commitSHA)
 	if err != nil {
-		return errors.Errorf("failed to get commit information from git source for commit sha %q: %w", commitSHA, err)
+		return ErrFromGitSource(errors.Errorf("failed to get commit information from git source for commit sha %q: %w", commitSHA, err))
 	}
 
 	// use the commit full sha since the user could have provided a short commit sha

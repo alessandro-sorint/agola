@@ -99,7 +99,7 @@ func (n *NotificationService) updateCommitStatus(ctx context.Context, ev *rstype
 	context := fmt.Sprintf("%s/%s/%s", n.gc.ID, project.Name, run.RunConfig.Name)
 
 	if err := gitSource.CreateCommitStatus(project.RepositoryPath, run.Run.Annotations[action.AnnotationCommitSHA], commitStatus, targetURL, description, context); err != nil {
-		return err
+		return action.ErrFromGitSource(err)
 	}
 
 	return nil
